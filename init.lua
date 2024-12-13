@@ -198,6 +198,10 @@ vim.keymap.set('n', '<leader>cc', function()
   vim.fn.system '!g++ -Wall -std=c++17 % && ./a.out<cr>'
 end, { desc = '[C]ompile [C]pp file' })
 
+-- navigate through quickfix
+vim.keymap.set('n', ']q', vim.cmd.cnext, { desc = 'Next [Q]uickfix entry' })
+vim.keymap.set('n', '[q', vim.cmd.cprevious, { desc = 'Previous [Q]uickfix entry' })
+
 -- [[ Basic Autocommands ]]
 --  See `:help lua-guide-autocommands`
 
@@ -288,12 +292,40 @@ require('lazy').setup {
       require('which-key').setup()
 
       -- Document existing key chains
-      require('which-key').register {
-        ['<leader>c'] = { name = '[C]ode', _ = 'which_key_ignore' },
-        ['<leader>d'] = { name = '[D]ocument', _ = 'which_key_ignore' },
-        ['<leader>r'] = { name = '[R]ename', _ = 'which_key_ignore' },
-        ['<leader>s'] = { name = '[S]earch', _ = 'which_key_ignore' },
-        ['<leader>w'] = { name = '[W]orkspace', _ = 'which_key_ignore' },
+      require('which-key').add {
+        { '', group = '[D]ocument' },
+        { '', group = '[C]ode' },
+        { '', group = '[S]earch' },
+        { '', group = '[W]orkspace' },
+        { '', group = '[R]ename' },
+        { '', desc = '', hidden = true, mode = { 'n', 'n', 'n', 'n', 'n' } },
+      }
+
+      local wk = require 'which-key'
+      wk.add {
+        mode = { 'v' },
+        { '<leader>s', group = 'Silicon' },
+        {
+          '<leader>sc',
+          function()
+            require('nvim-silicon').clip()
+          end,
+          desc = 'Copy code screenshot to clipboard',
+        },
+        {
+          '<leader>sf',
+          function()
+            require('nvim-silicon').file()
+          end,
+          desc = 'Save code screenshot as file',
+        },
+        {
+          '<leader>ss',
+          function()
+            require('nvim-silicon').shoot()
+          end,
+          desc = 'Create code screenshot',
+        },
       }
     end,
   },
@@ -359,9 +391,9 @@ require('lazy').setup {
         --  All the info you're looking for is in `:help telescope.setup()`
         --
         defaults = {
-          file_ignore_patterns = {
-            'node_modules',
-          },
+          -- file_ignore_patterns = {
+          --   'node_modules',
+          -- },
           mappings = {
             i = { ['<c-enter>'] = 'to_fuzzy_refine' },
           },
@@ -448,8 +480,7 @@ require('lazy').setup {
       --
       -- LSP provides Neovim with features like:
       --  - Go to definition
-      --  - Find references
-      --  - Autocompletion
+      --  - Find references - Autocompletion
       --  - Symbol Search
       --  - and more!
       --
@@ -583,7 +614,6 @@ require('lazy').setup {
         -- But for many setups, the LSP (`tsserver`) will work just fine
         tsserver = {},
         --
-
         lua_ls = {
           -- cmd = {...},
           -- filetypes { ...},
@@ -660,6 +690,7 @@ require('lazy').setup {
         -- is found.
         javascript = { { 'prettierd', 'prettier' }, 'rustywind' },
         typescript = { { 'prettierd', 'prettier' }, 'rustywind' },
+        json = { { 'prettierd', 'prettier' } },
         javascriptreact = { { 'prettierd', 'prettier' }, 'rustywind' },
         typescriptreact = { { 'prettierd', 'prettier' }, 'rustywind' },
         ruby = { { 'rubyfmt' } },
@@ -669,6 +700,35 @@ require('lazy').setup {
         sql = { 'sqlfmt' },
       },
     },
+    init = function()
+      vim.api.nvim_create_user_command('FormatDisable', function(args)
+        if args.bang then
+          -- FormatDisable! will disable formatting just for this buffer
+          vim.b.disable_autoformat = true
+        else
+          vim.g.disable_autoformat = true
+        end
+      end, {
+        desc = 'Disable autoformat-on-save',
+        bang = true,
+      })
+      vim.api.nvim_create_user_command('FormatEnable', function()
+        vim.b.disable_autoformat = false
+        vim.g.disable_autoformat = false
+      end, {
+        desc = 'Re-enable autoformat-on-save',
+      })
+
+      vim.keymap.set('n', '<leader>fd', function()
+        vim.cmd.FormatDisable()
+      end, {
+        desc = 'Disable autoformat-on-save',
+      })
+
+      vim.keymap.set('n', '<leader>fe', function()
+        vim.cmd.FormatEnable()
+      end, { desc = 'Re-enable autoformat-on-save' })
+    end,
   },
 
   { -- Autocompletion
@@ -864,7 +924,7 @@ require('lazy').setup {
       vim.keymap.set('n', '<C-l>', function()
         ui.nav_file(3)
       end)
-      vim.keymap.set('n', '<C-ñ>', function()
+      vim.keymap.set('n', 'ñ', function()
         ui.nav_file(4)
       end)
     end,
@@ -909,6 +969,23 @@ require('lazy').setup {
   },
 
   { 'jiangxincode/mpi.vim' },
+  -- create code images
+  {
+    'michaelrommel/nvim-silicon',
+    lazy = true,
+    cmd = 'Silicon',
+    opts = {
+      disable_defaults = true,
+      debug = true,
+    },
+  },
+  { 'echasnovski/mini.icons', version = '*' },
+  {
+    'github/copilot.vim',
+    config = function()
+      vim.g.copilot_enabled = false
+    end,
+  },
 
   -- The following two comments only work if you have downloaded the kickstart repo, not just copy pasted the
   -- init.lua. If you want these files, they are in the repository, so you can just download them and
