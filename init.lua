@@ -116,6 +116,11 @@ vim.opt.breakindent = true
 -- Save undo history
 vim.opt.undofile = true
 
+-- Preserve a file's existing end-of-file newline state instead of forcing one.
+-- Files that have a trailing newline keep it; files that don't (some legacy
+-- repos) stay that way, so saving them produces no spurious diff.
+vim.opt.fixendofline = false
+
 -- Case-insensitive searching UNLESS \C or capital in search
 vim.opt.ignorecase = true
 vim.opt.smartcase = true
@@ -585,7 +590,7 @@ require('lazy').setup {
           filetypes = { 'php' },
         },
         emmet_language_server = {
-          filetypes = { 'css', 'eruby', 'html', 'javascript', 'javascriptreact', 'less', 'sass', 'scss', 'pug', 'typescriptreact', 'php' },
+          filetypes = { 'css', 'eruby', 'html', 'javascript', 'javascriptreact', 'less', 'sass', 'scss', 'pug', 'typescript', 'typescriptreact', 'php' },
         },
         arduino_language_server = {
           cmd = {
@@ -671,10 +676,19 @@ require('lazy').setup {
     'stevearc/conform.nvim',
     opts = {
       notify_on_error = false,
-      format_on_save = {
-        timeout_ms = 500,
-        lsp_fallback = true,
-      },
+      format_on_save = function(bufnr)
+        if vim.g.disable_autoformat or vim.b[bufnr].disable_autoformat then
+          return nil
+        end
+        -- Only format filetypes listed below. Without this guard conform falls
+        -- back to the LSP, which reformats files to the server's own defaults
+        -- (e.g. clangd rewrites C to LLVM style) even in repos that never
+        -- asked for it.
+        if not require('conform').formatters_by_ft[vim.bo[bufnr].filetype] then
+          return nil
+        end
+        return { timeout_ms = 500, lsp_format = 'fallback' }
+      end,
       formatters_by_ft = {
         lua = { 'stylua' },
         -- Conform can also run multiple formatters sequentially
@@ -682,11 +696,11 @@ require('lazy').setup {
         --
         -- You can use a sub-list to tell conform to run *until* a formatter
         -- is found.
-        javascript = { { 'prettierd', 'prettier' }, 'rustywind' },
-        typescript = { { 'prettierd', 'prettier' }, 'rustywind' },
-        json = { { 'prettierd', 'prettier' } },
-        javascriptreact = { { 'prettierd', 'prettier' }, 'rustywind' },
-        typescriptreact = { { 'prettierd', 'prettier' }, 'rustywind' },
+        javascript = { 'prettierd', 'rustywind' },
+        typescript = { 'prettierd', 'rustywind' },
+        json = { 'prettier' },
+        javascriptreact = { 'prettierd', 'rustywind' },
+        typescriptreact = { 'prettierd', 'rustywind' },
         ruby = { { 'rubyfmt' } },
         fortran = { 'findent' },
         php = { 'pint', 'rustywind' },
@@ -878,18 +892,24 @@ require('lazy').setup {
 
   { -- Highlight, edit, and navigate code
     'nvim-treesitter/nvim-treesitter',
+    branch = 'main',
+    lazy = false,
     build = ':TSUpdate',
     config = function()
       -- [[ Configure Treesitter ]] See `:help nvim-treesitter`
 
-      ---@diagnostic disable-next-line: missing-fields
-      require('nvim-treesitter.configs').setup {
-        ensure_installed = { 'bash', 'c', 'html', 'lua', 'markdown', 'vim', 'vimdoc' },
-        -- Autoinstall languages that are not installed
-        auto_install = true,
-        highlight = { enable = true },
-        indent = { enable = true },
-      }
+      local treesitter = require 'nvim-treesitter'
+      treesitter.install { 'bash', 'c', 'html', 'lua', 'markdown', 'markdown_inline', 'vim', 'vimdoc' }
+
+      vim.api.nvim_create_autocmd('FileType', {
+        desc = 'Enable Treesitter highlighting and indentation',
+        group = vim.api.nvim_create_augroup('kickstart-treesitter', { clear = true }),
+        pattern = { 'sh', 'c', 'html', 'lua', 'markdown', 'vim', 'vimdoc' },
+        callback = function()
+          vim.treesitter.start()
+          vim.bo.indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+        end,
+      })
 
       -- There are additional nvim-treesitter modules that you can use to interact
       -- with nvim-treesitter. You should go explore a few and see what interests you:
