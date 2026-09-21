@@ -775,7 +775,26 @@ do
     },
     clangd = { cmd = { 'clangd' } },
     gopls = {},
-    pyright = {},
+    pyright = {
+      -- Pyright takes the interpreter from `python.pythonPath`; with nothing set
+      -- it uses the first `python3` on PATH, which here is the mise shim and
+      -- carries none of a project's packages ("Import X could not be resolved").
+      -- Resolve it per project root instead: an active venv, a venv in the root,
+      -- then the system interpreter, which is where pacman and `pip --user` put
+      -- things.
+      before_init = function(_, config)
+        local root = config.root_dir or vim.fn.getcwd()
+        local candidates = {}
+        if vim.env.VIRTUAL_ENV then table.insert(candidates, vim.env.VIRTUAL_ENV .. '/bin/python') end
+        vim.list_extend(candidates, { root .. '/.venv/bin/python', root .. '/venv/bin/python', '/usr/bin/python3' })
+        for _, python in ipairs(candidates) do
+          if vim.uv.fs_stat(python) then
+            config.settings = vim.tbl_deep_extend('force', config.settings or {}, { python = { pythonPath = python } })
+            return
+          end
+        end
+      end,
+    },
     rust_analyzer = {},
     -- ... etc. See `:help lspconfig-all` for a list of all the pre-configured LSPs
     --
@@ -845,6 +864,10 @@ do
   local ensure_installed = vim.tbl_keys(servers or {})
   vim.list_extend(ensure_installed, {
     -- You can add other tools here that you want Mason to install
+    -- nvim-treesitter's `main` branch builds every parser with the `tree-sitter` CLI.
+    -- It isn't packaged everywhere, and mason prepends its own bin directory to
+    -- Neovim's PATH, so installing it here keeps parser builds working on any machine.
+    'tree-sitter-cli',
   })
 
   require('mason-tool-installer').setup { ensure_installed = ensure_installed }
@@ -1106,7 +1129,7 @@ end
 
 -- ============================================================
 -- SECTION 11: PERSONAL PLUGINS
--- harpoon, fugitive, arduino, mpi, silicon, copilot, undotree, cloak
+-- harpoon, fugitive, arduino, mpi, silicon, copilot, undotree, cloak, render-markdown
 -- ============================================================
 do
   -- [[ harpoon ]] quick file marks (v1 API lives on the `master` branch)
@@ -1199,6 +1222,13 @@ do
       },
     },
   }
+
+  -- [[ render-markdown ]] in-buffer markdown rendering
+  vim.pack.add { gh 'MeanderingProgrammer/render-markdown.nvim' }
+  require('render-markdown').setup {
+    completions = { lsp = { enabled = true } },
+  }
+  vim.keymap.set('n', '<leader>m', function() require('render-markdown').buf_toggle() end, { desc = 'Toggle [M]arkdown rendering' })
 end
 
 -- The line beneath this is called `modeline`. See `:help modeline`
