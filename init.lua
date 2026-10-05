@@ -275,6 +275,29 @@ do
     group = vim.api.nvim_create_augroup('kickstart-highlight-yank', { clear = true }),
     callback = function() vim.hl.on_yank() end,
   })
+
+  -- [[ Spellcheck ]]
+  --  English by default in markdown; <leader>tl cycles to English+Spanish and Spanish only.
+  --  Missing spell files (e.g. Spanish) are downloaded on first use. See `:help spell`
+  require('nvim.spellfile').config { confirm = false }
+  vim.api.nvim_create_autocmd('FileType', {
+    desc = 'Enable spellcheck in markdown',
+    group = vim.api.nvim_create_augroup('custom-spell', { clear = true }),
+    pattern = 'markdown',
+    callback = function()
+      vim.opt_local.spell = true
+      vim.opt_local.spelllang = 'en'
+    end,
+  })
+
+  local spelllangs = { 'en', 'en,es', 'es' }
+  vim.keymap.set('n', '<leader>tl', function()
+    local i = (vim.fn.index(spelllangs, vim.bo.spelllang) + 1) % #spelllangs
+    vim.opt_local.spelllang = spelllangs[i + 1]
+    vim.opt_local.spell = true
+    vim.notify('spelllang=' .. vim.bo.spelllang)
+  end, { desc = '[T]oggle spell [L]anguage (en / en,es / es)' })
+  vim.keymap.set('n', '<leader>ts', function() vim.opt_local.spell = not vim.wo.spell end, { desc = '[T]oggle [S]pellcheck' })
 end
 
 -- ============================================================
