@@ -278,8 +278,35 @@ do
 
   -- [[ Spellcheck ]]
   --  English by default in markdown; <leader>tl cycles to English+Spanish and Spanish only.
-  --  Missing spell files (e.g. Spanish) are downloaded on first use. See `:help spell`
+  --  The Spanish is Argentine (voseo, local vocabulary). Vim's own `es` dictionary only knows
+  --  Spain and Mexico, so `es-ar` is built on first use from the RLA-ES hunspell dictionary
+  --  that LibreOffice ships. See `:help spell` and `:help :mkspell`
   require('nvim.spellfile').config { confirm = false }
+
+  local function ensure_es_ar()
+    local spell_dir = vim.fn.stdpath 'data' .. '/site/spell'
+    if vim.uv.fs_stat(spell_dir .. '/es-ar.utf-8.spl') then return true end
+
+    vim.notify 'Building es-ar spell file…'
+    local tmp = vim.fn.tempname()
+    vim.fn.mkdir(tmp, 'p')
+    vim.fn.mkdir(spell_dir, 'p')
+    local base = 'https://raw.githubusercontent.com/LibreOffice/dictionaries/master/es/es_AR.'
+    for _, ext in ipairs { 'aff', 'dic' } do
+      local res = vim.system({ 'curl', '-sfL', '-o', tmp .. '/es_AR.' .. ext, base .. ext }):wait()
+      if res.code ~= 0 then
+        vim.notify('Could not download es_AR.' .. ext, vim.log.levels.ERROR)
+        return false
+      end
+    end
+    -- Vim's mkspell rejects `FLAG UTF-8`, but reads the multibyte flags fine without it
+    local aff = tmp .. '/es_AR.aff'
+    vim.fn.writefile(vim.tbl_filter(function(l) return l ~= 'FLAG UTF-8' end, vim.fn.readfile(aff)), aff)
+    vim.cmd('silent mkspell! ' .. vim.fn.fnameescape(spell_dir .. '/es-ar') .. ' ' .. vim.fn.fnameescape(tmp .. '/es_AR'))
+    vim.fn.delete(tmp, 'rf')
+    return true
+  end
+
   vim.api.nvim_create_autocmd('FileType', {
     desc = 'Enable spellcheck in markdown',
     group = vim.api.nvim_create_augroup('custom-spell', { clear = true }),
@@ -290,13 +317,14 @@ do
     end,
   })
 
-  local spelllangs = { 'en', 'en,es', 'es' }
+  local spelllangs = { 'en', 'en,es-ar', 'es-ar' }
   vim.keymap.set('n', '<leader>tl', function()
     local i = (vim.fn.index(spelllangs, vim.bo.spelllang) + 1) % #spelllangs
+    if spelllangs[i + 1]:find 'es%-ar' and not ensure_es_ar() then return end
     vim.opt_local.spelllang = spelllangs[i + 1]
     vim.opt_local.spell = true
     vim.notify('spelllang=' .. vim.bo.spelllang)
-  end, { desc = '[T]oggle spell [L]anguage (en / en,es / es)' })
+  end, { desc = '[T]oggle spell [L]anguage (en / en,es-ar / es-ar)' })
   vim.keymap.set('n', '<leader>ts', function() vim.opt_local.spell = not vim.wo.spell end, { desc = '[T]oggle [S]pellcheck' })
 end
 
